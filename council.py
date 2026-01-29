@@ -35,9 +35,10 @@ AGENTS = {
     },
     "claude": {
         "name": "Claude",
-        "cmd": ["claude", "-p", "--allowedTools", ""],  # -p = print only, no tools
+        "cmd": ["claude", "-p"],  # -p = print mode only
         "description": "Anthropic's Claude - architecture, reasoning",
         "project_aware": False,
+        "use_stdin": True,  # Claude works better with stdin than positional args
     },
     "codex": {
         "name": "Codex",
@@ -130,6 +131,7 @@ async def query_agent(
     agent = AGENTS[agent_id]
     cmd = list(agent["cmd"])
     cwd = None
+    use_stdin = agent.get("use_stdin", False)  # Some agents need stdin instead of args
     
     try:
         # Handle project-aware agents
@@ -149,17 +151,25 @@ async def query_agent(
                 subprocess.run(["git", "init"], cwd=tmpdir, capture_output=True)
                 cwd = tmpdir
         
-        cmd.append(prompt)
-        
-        proc = await asyncio.create_subprocess_exec(
-            *cmd,
-            stdout=asyncio.subprocess.PIPE,
-            stderr=asyncio.subprocess.PIPE,
-            cwd=cwd,
-        )
-        # Wait for agent to complete - no artificial timeout
-        # Agents think as long as they need
-        stdout, stderr = await proc.communicate()
+        # Some agents (Claude) work better with stdin than positional args
+        if use_stdin:
+            proc = await asyncio.create_subprocess_exec(
+                *cmd,
+                stdin=asyncio.subprocess.PIPE,
+                stdout=asyncio.subprocess.PIPE,
+                stderr=asyncio.subprocess.PIPE,
+                cwd=cwd,
+            )
+            stdout, stderr = await proc.communicate(input=prompt.encode())
+        else:
+            cmd.append(prompt)
+            proc = await asyncio.create_subprocess_exec(
+                *cmd,
+                stdout=asyncio.subprocess.PIPE,
+                stderr=asyncio.subprocess.PIPE,
+                cwd=cwd,
+            )
+            stdout, stderr = await proc.communicate()
         
         response = stdout.decode("utf-8", errors="replace").strip()
         return {
