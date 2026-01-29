@@ -124,7 +124,7 @@ async def query_agent(
     agent_id: str, 
     prompt: str, 
     project_dir: Optional[Path] = None,
-    timeout: int = 180
+    timeout: int = 600  # 10 minutes - agents should complete, not timeout
 ) -> dict:
     """Query a single agent, optionally with project context."""
     agent = AGENTS[agent_id]
@@ -157,7 +157,9 @@ async def query_agent(
             stderr=asyncio.subprocess.PIPE,
             cwd=cwd,
         )
-        stdout, stderr = await asyncio.wait_for(proc.communicate(), timeout=timeout)
+        # Wait for agent to complete - no artificial timeout
+        # Agents think as long as they need
+        stdout, stderr = await proc.communicate()
         
         response = stdout.decode("utf-8", errors="replace").strip()
         return {
@@ -166,8 +168,7 @@ async def query_agent(
             "response": response,
             "success": proc.returncode == 0 and len(response) > 50,
         }
-    except asyncio.TimeoutError:
-        return {"agent": agent_id, "name": agent["name"], "response": "", "success": False, "error": "Timeout"}
+    # No timeout - agents complete when ready
     except Exception as e:
         return {"agent": agent_id, "name": agent["name"], "response": "", "success": False, "error": str(e)}
 
