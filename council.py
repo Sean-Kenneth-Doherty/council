@@ -23,7 +23,27 @@ from typing import Optional
 import tempfile
 import subprocess
 
-__version__ = "0.2.0"
+__version__ = "0.3.0"
+
+# Config file path
+CONFIG_DIR = Path.home() / ".council"
+CONFIG_FILE = CONFIG_DIR / "config.json"
+
+
+def load_config() -> dict:
+    """Load config from ~/.council/config.json if exists."""
+    if CONFIG_FILE.exists():
+        try:
+            return json.loads(CONFIG_FILE.read_text())
+        except:
+            pass
+    return {}
+
+
+def save_config(config: dict):
+    """Save config to ~/.council/config.json."""
+    CONFIG_DIR.mkdir(exist_ok=True)
+    CONFIG_FILE.write_text(json.dumps(config, indent=2))
 
 # Agent configurations - ALL READ-ONLY (analysis only)
 AGENTS = {
@@ -48,6 +68,7 @@ AGENTS = {
         "name": "Kimi",
         "cmd": ["kimi", "--quiet", "-p"],  # --quiet = non-interactive print mode
         "description": "Moonshot's Kimi - UI/UX, frontend",
+        "use_project_cwd": True,  # Run in project dir so it can browse files
     },
 }
 
@@ -130,7 +151,11 @@ async def query_agent(
     use_stdin = agent.get("use_stdin", False)  # Some agents need stdin instead of args
     
     try:
-        # Handle project-aware agents
+        # Some agents browse files, need to run in project dir
+        if project_dir and agent.get("use_project_cwd"):
+            cwd = project_dir
+        
+        # Handle project-aware agents with flags
         if project_dir and agent.get("project_aware"):
             if agent.get("workdir_flag"):
                 cmd.extend([agent["workdir_flag"], str(project_dir)])
@@ -191,17 +216,30 @@ def format_responses(responses: list[dict], exclude: str = None) -> str:
 
 
 def extract_choice(response: str) -> Optional[str]:
-    """Extract which option the agent chose."""
+    """Extract which option the agent chose. Supports JSON or text patterns."""
+    # Try JSON first: {"vote": "A", "confidence": 0.9, ...}
+    json_match = re.search(r'\{[^{}]*"vote"\s*:\s*"([^"]+)"[^{}]*\}', response, re.IGNORECASE)
+    if json_match:
+        return json_match.group(1).upper()
+    
+    # Common recommendation patterns
     patterns = [
-        r"(?:choose|pick|recommend|go with|select)\s+(?:option\s+)?([A-Z])",
+        r"my\s+(?:recommendation|choice|vote)\s*(?:is|:)\s*(?:option\s+)?(\w+)",
+        r"(?:i\s+)?(?:choose|pick|recommend|go with|select)\s+(?:option\s+)?(\w+)",
         r"(?:option\s+)?([A-Z])\s+(?:is|would be)\s+(?:the\s+)?(?:best|right)",
-        r"my\s+(?:recommendation|choice)\s*(?:is|:)\s*(?:option\s+)?([A-Z])",
         r"^([A-Z])\)",
+        r"\*\*(\w+)\*\*\s*(?:first|wins|should)",  # **Undo/Redo** first
     ]
     for pattern in patterns:
         match = re.search(pattern, response, re.IGNORECASE | re.MULTILINE)
         if match:
-            return match.group(1).upper()
+            choice = match.group(1)
+            # Normalize common choices
+            if choice.lower() in ["undo", "undo/redo", "undoredo", "undo-redo"]:
+                return "U"
+            if choice.lower() in ["boolean", "booleans", "csg", "boolean ops"]:
+                return "B"
+            return choice[0].upper() if len(choice) == 1 else choice.upper()
     return None
 
 
@@ -396,6 +434,11 @@ Provide your analysis and recommendation."""
 
 
 def main():
+    # Load config for defaults
+    config = load_config()
+    default_agents = config.get("default_agents", "gemini,claude")
+    default_rounds = config.get("default_rounds", 3)
+    
     parser = argparse.ArgumentParser(
         description="Multi-agent deliberation with project context",
         formatter_class=argparse.RawDescriptionHelpFormatter,
@@ -412,22 +455,36 @@ Examples:
 
   # Multiple agents, more rounds
   council -p . -d -r 4 -a gemini,claude,codex,kimi "Review the codebase"
+
+Config: ~/.council/config.json (set default_agents, default_rounds)
 """
     )
     parser.add_argument("prompt", nargs="?", help="Question for the council")
     parser.add_argument("-p", "--project", type=Path, help="Project directory for context")
-    parser.add_argument("-a", "--agents", default="gemini,claude", help="Comma-separated agents")
+    parser.add_argument("-a", "--agents", default=default_agents, help=f"Comma-separated agents (default: {default_agents})")
     parser.add_argument("-d", "--deliberate", action="store_true", help="Enable multi-round deliberation")
-    parser.add_argument("-r", "--rounds", type=int, default=3, help="Max deliberation rounds")
+    parser.add_argument("-r", "--rounds", type=int, default=default_rounds, help=f"Max deliberation rounds (default: {default_rounds})")
     parser.add_argument("-l", "--list", action="store_true", help="List available agents")
+    parser.add_argument("--init-config", action="store_true", help="Create default config file")
     parser.add_argument("-v", "--version", action="version", version=f"council {__version__}")
     
     args = parser.parse_args()
     
+    if args.init_config:
+        default_config = {
+            "default_agents": "gemini,claude,codex,kimi",
+            "default_rounds": 3,
+            "session_dir": str(CONFIG_DIR / "sessions"),
+        }
+        save_config(default_config)
+        log(f"✅ Created config at {CONFIG_FILE}")
+        log(f"   Edit to customize defaults.")
+        return 0
+    
     if args.list:
         log("\n🏛️  AVAILABLE AGENTS\n")
         for aid, a in AGENTS.items():
-            proj = "📂" if a.get("project_aware") else "  "
+            proj = "📂" if a.get("use_project_cwd") else "  "
             log(f"  {proj} {aid}: {a['description']}")
         log("\n  📂 = runs in project directory\n")
         return 0
