@@ -44,7 +44,11 @@ AGENTS = {
         "description": "OpenAI's Codex - heavy engineering",
         "needs_git": True,
     },
-    # Note: Kimi doesn't support non-interactive mode
+    "kimi": {
+        "name": "Kimi",
+        "cmd": ["kimi", "--quiet", "-p"],  # --quiet = non-interactive print mode
+        "description": "Moonshot's Kimi - UI/UX, frontend",
+    },
 }
 
 COUNCIL_DIR = Path.home() / ".council"
