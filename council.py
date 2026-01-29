@@ -25,34 +25,26 @@ import subprocess
 
 __version__ = "0.2.0"
 
-# Agent configurations - ALL READ-ONLY (no code changes, just analysis)
+# Agent configurations - ALL READ-ONLY (analysis only)
 AGENTS = {
     "gemini": {
         "name": "Gemini",
         "cmd": ["gemini"],
         "description": "Google's Gemini - research, broad knowledge",
-        "project_aware": False,  # Context passed in prompt
     },
     "claude": {
         "name": "Claude",
-        "cmd": ["claude", "-p"],  # -p = print mode only
+        "cmd": ["claude", "-p"],  # -p = print mode
         "description": "Anthropic's Claude - architecture, reasoning",
-        "project_aware": False,
-        "use_stdin": True,  # Claude works better with stdin than positional args
+        "use_stdin": True,  # Claude needs stdin, not positional args
     },
     "codex": {
         "name": "Codex",
-        "cmd": ["codex", "exec", "--read-only"],  # Read-only mode
+        "cmd": ["codex", "exec"],  # Default sandbox is read-only
         "description": "OpenAI's Codex - heavy engineering",
         "needs_git": True,
-        "project_aware": False,  # Context in prompt, not filesystem access
     },
-    "kimi": {
-        "name": "Kimi", 
-        "cmd": ["kimi", "ask"],  # ask = one-shot Q&A, no file changes
-        "description": "Kimi - beautiful UI/UX, frontend",
-        "project_aware": False,
-    },
+    # Note: Kimi doesn't support non-interactive mode
 }
 
 COUNCIL_DIR = Path.home() / ".council"
