@@ -172,7 +172,7 @@ async def query_agent(
             "agent": agent_id,
             "name": agent["name"],
             "response": response,
-            "success": proc.returncode == 0 and len(response) > 50,
+            "success": proc.returncode == 0 and len(response) > 0,  # Any response = success
         }
     # No timeout - agents complete when ready
     except Exception as e:
