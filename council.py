@@ -25,33 +25,32 @@ import subprocess
 
 __version__ = "0.2.0"
 
-# Agent configurations - all the coding agents
+# Agent configurations - ALL READ-ONLY (no code changes, just analysis)
 AGENTS = {
     "gemini": {
         "name": "Gemini",
         "cmd": ["gemini"],
         "description": "Google's Gemini - research, broad knowledge",
-        "project_aware": False,  # Just gets context in prompt
+        "project_aware": False,  # Context passed in prompt
     },
     "claude": {
         "name": "Claude",
-        "cmd": ["claude", "-p"],
+        "cmd": ["claude", "-p", "--allowedTools", ""],  # -p = print only, no tools
         "description": "Anthropic's Claude - architecture, reasoning",
         "project_aware": False,
     },
     "codex": {
         "name": "Codex",
-        "cmd": ["codex", "exec"],
+        "cmd": ["codex", "exec", "--read-only"],  # Read-only mode
         "description": "OpenAI's Codex - heavy engineering",
         "needs_git": True,
-        "project_aware": True,  # Runs in project directory
+        "project_aware": False,  # Context in prompt, not filesystem access
     },
     "kimi": {
-        "name": "Kimi",
-        "cmd": ["kimi", "chat", "-y"],  # -y for non-interactive
+        "name": "Kimi", 
+        "cmd": ["kimi", "ask"],  # ask = one-shot Q&A, no file changes
         "description": "Kimi - beautiful UI/UX, frontend",
-        "project_aware": True,
-        "workdir_flag": "-w",
+        "project_aware": False,
     },
 }
 
